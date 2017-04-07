@@ -1,0 +1,18 @@
+# data
+data/processed
+data/raw
+
+# reports
+**/*.pdf
+
+# model output
+output
+
+# binary files
+bin
+
+# todos
+todo.md
+
+# libraries directory
+lib
