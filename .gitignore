@@ -16,3 +16,6 @@ todo.md
 
 # libraries directory
 lib
+
+# notebook checkpoints
+.ipynb_checkpoints
