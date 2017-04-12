@@ -19,3 +19,7 @@ lib
 
 # notebook checkpoints
 .ipynb_checkpoints
+
+# python
+*.pyc
+__pycache__
