@@ -1,13 +1,17 @@
 import argparse
 import numpy as np
+import warnings
 from cssp import CSSP
+from kmeans import KMeans
+from kasp import KASP
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Benchmark spectral clustering algorithms')
     parser.add_argument('dataset', metavar='d', type=str,
                         help='data set to use in benchmarking')
-    parser.add_argument('algorithms', metavar='a', type=str, nargs='+', choices=['cssp'],
+    parser.add_argument('algorithms', metavar='a', type=str, nargs='+',
+                        choices=['cssp', 'kmeans', 'kasp'],
                         help='algorithms to run')
     parser.add_argument('--subset', '-s', type=int, nargs='*',
                         help='use only a subset of classes from the data set')
@@ -15,6 +19,8 @@ if __name__ == '__main__':
                         help='number of iterations to average over')
     parser.add_argument('--columns', '-m', type=int, default=1000,
                         help='number of columns to sample')
+    parser.add_argument('--gamma', '-g', type=int, default=8,
+                        help='KASP data reduction ratio')
     args = parser.parse_args()
 
     A = np.loadtxt(args.dataset, delimiter=',')
@@ -34,12 +40,19 @@ if __name__ == '__main__':
     print('iterations = {0}'.format(args.iterations))
     print()
 
+    warnings.filterwarnings('ignore')
+
     models = dict()
     for algorithm in args.algorithms:
         for i in range(args.iterations):
             if algorithm == 'cssp':
                 m = args.columns
                 model = CSSP(k, m)
+            elif algorithm == 'kmeans':
+                model = KMeans(k)
+            elif algorithm == 'kasp':
+                gamma = args.gamma
+                model = KASP(k, gamma)
             model.fit(X)
             if not algorithm in models:
                 models[algorithm] = []

@@ -1,3 +1,4 @@
+from itertools import permutations
 import numpy as np
 
 
@@ -21,8 +22,16 @@ class Clustering:
             raise Exception('Must run fit first.')
         n = Y.shape
         accuracy = np.zeros(self._k)
-        for i in range(self._k):
-            self._y_hat = (self._y_hat + i) % (self._k + 1)
-            self._y_hat[self._y_hat == 0] = 1
-            accuracy[i] = (Y == self._y_hat).sum() / n * 100
+        perms = []
+        for p in permutations(np.arange(1, self._k + 1)):
+            P = dict()
+            for i in range(self._k):
+                P[i] = p[i]
+            perms.append(P)
+        accuracy = np.zeros(len(perms))
+        for i in range(len(perms)):
+            yy = self._y_hat.copy()
+            for k, v in perms[i].items():
+                yy[self._y_hat == k] = v
+            accuracy[i] = (Y == yy).sum() / n * 100
         return accuracy.max()
