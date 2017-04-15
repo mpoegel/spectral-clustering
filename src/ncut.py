@@ -15,28 +15,28 @@ class NCut(Clustering):
     def fit(self, X):
         start = time.time()
         n, d = X.shape
-
+        # calculate the gaussian kernel parameter
         mu = 0
         for i in range(n):
             for j in range(n):
                 mu += np.linalg.norm(X[i] - X[j]) ** 2
         mu /= (n ** 2)
         mu = 1 / mu
-
+        # created the entire affinity matrix 
         W = np.empty((n, n))
         for i in range(n):
             for j in range(i,n):
                 val = np.e ** (-mu * np.linalg.norm(X[i] - X[j]) ** 2)
                 W[i, j] = val
                 W[j, i] = val
-
+        # compute the normalized Lapacian
         ww = W.sum(axis=0)
         D = np.diag(ww)
         D_ = np.diag(1 / np.sqrt(ww))
         L = np.identity(n) - D_.dot(W).dot(D_)
-
+        # compute the bottom k eigenvalues of L
         V, Z = sp.linalg.eigh(L, eigvals=(0, self._k))
-
+        # and finally cluster based on the bottom k eigenvectors
         Z_ = sp.cluster.vq.whiten(Z)
         self._centroids, self._distortion = sp.cluster.vq.kmeans(Z_, self._k)
         self._y_hat = np.zeros(n, dtype=int)

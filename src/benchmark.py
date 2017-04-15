@@ -5,6 +5,7 @@ from cssp import CSSP
 from kmeans import KMeans
 from kasp import KASP
 from ncut import NCut
+from nystrom import Nystrom
 
 
 if __name__ == '__main__':
@@ -12,7 +13,7 @@ if __name__ == '__main__':
     parser.add_argument('dataset', metavar='d', type=str,
                         help='data set to use in benchmarking')
     parser.add_argument('algorithms', metavar='a', type=str, nargs='+',
-                        choices=['cssp', 'kmeans', 'kasp', 'ncut'],
+                        choices=['cssp', 'kmeans', 'kasp', 'ncut', 'nystrom'],
                         help='algorithms to run')
     parser.add_argument('--subset', '-s', type=int, nargs='*',
                         help='use only a subset of classes from the data set')
@@ -56,6 +57,9 @@ if __name__ == '__main__':
                 model = KASP(k, gamma)
             elif algorithm == 'ncut':
                 model = NCut(k)
+            elif algorithm == 'nystrom':
+                m = args.columns
+                model = Nystrom(k, m)
             model.fit(X)
             if not algorithm in models:
                 models[algorithm] = []
