@@ -1,0 +1,132 @@
+## CSCI 4971 - Large Scale Matrix Computation and Machine Learning
+
+### Time and Space Efficient Spectral Clustering via Column Sampling by Li et al.
+by Matt Poegel
+\ 
+
+\ 
+
+Repository: [https://github.com/mpoegel/spectral-clustering](https://github.com/mpoegel/spectral-clustering)
+
+## Motivation
+
+* Clustering algorithms are useful to uncover natural groupings in the data
+* $k$-means is great but spectral clustering can be better
+    * allows for clusters with non-convex boundaries
+
+
+## Spectral Clustering
+
+$\begin{array}{|l|} \hline
+\textbf{Input: } X \in \mathbb{R}^{n \times d},\ k \text{ clusters} \\
+\textbf{Output: } \hat{y} \text{ cluster label for each row of } X \\ \hline
+\text{1. Form affinity matrix, } W \in \mathbb{R}^{n \times n} \\
+\text{2. Form degree matrix, } D \leftarrow \texttt{diag}(W \mathbf{1}) \\
+\text{3. } L \leftarrow I - D^{-\frac{1}{2}} W D^{-\frac{1}{2}} \\
+\text{4. Take the bottom } k \text{ eigenvectors of } L \text{ to form } Z \\
+\text{5. } \hat{y} \leftarrow \texttt{KMeans}(Z,\ k) \\ \hline
+\end{array}$
+
+
+## Intuition for Randomness
+
+* Computing $W \in \mathbb{R}^{n \times n}$ is expensive
+    * Use randomness to estimate $W$
+* $W$ is also expensive to store
+    * Use randomness to only use parts of $W$
+
+
+## Nystrom-based Spectral Clustering
+
+$\begin{array}{|l|} \hline
+\textbf{Input: } X \in \mathbb{R}^{n \times d},\ k \text{ clusters, } m \text{ sampled columns} \\
+\textbf{Output: } \hat{y} \text{ cluster label for each row of } X \\ \hline
+\text{1. } C \leftarrow A S \in \mathbb{R}^{n \times m} \text{ where } A \text{ is the affinity matrix} \\
+\text{2. } W \leftarrow S^{\intercal} A S \\
+\text{2. } \hat{D} \leftarrow \texttt{diag}(C W^{\dagger} C^{\intercal} \mathbf{1}) \\
+\text{3. } D_{11} \leftarrow \texttt{diag}(W \mathbf{1}) \\
+\text{4. } \hat{M}_{:1} = [M_{11} \hat{M}_{21}^{\intercal}]^{\intercal} \leftarrow \hat{D}^{-\frac{1}{2}} C D_{11}^{-\frac{1}{2}} \\
+\text{5. } S \leftarrow M_{11} + M_{11}^{-\frac{1}{2}} \hat{M}_{21}^{\intercal} \hat{M}_{21} M_{11}^{-\frac{1}{2}} \\
+\text{6. SVD: } S = U \Lambda T^{\intercal} \\
+\text{7. } V \leftarrow \hat{M}_{:1} M_{11}^{-\frac{1}{2}} U \Lambda^{-\frac{1}{2}} \\
+\text{8. } \hat{y} \leftarrow \texttt{KMeans}(V_k,\ k) \\ \hline
+\end{array}$
+
+
+## Time and Space Complexity
+
+|        | Nystrom                   |
+| ------ |:-------------------------:|
+| Time   | $\mathcal{O}(nm^2 + m^3)$ |
+| Space  | $\mathcal{O}(nm)$         |
+
+
+## Proposed Algorithm
+
+$\begin{array}{|l|} \hline
+\textbf{Input: } X \in \mathbb{R}^{n \times d},\ k \text{ clusters, } Z \text{ m points from } X \\
+\textbf{Output: } \hat{y} \text{ cluster label for each row of } X \\ \hline
+\text{1. Form the affinity matrix } A_{11} \in \mathbb{R}^{m \times m} \text{ using } Z \\
+\text{2. } D_* \leftarrow \texttt{diag}(A_{11} \mathbf{1}) \\
+\text{3. } M_* \leftarrow D_*^{-\frac{1}{2}} A_{11} D_*^{-\frac{1}{2}} \\
+\text{4. Compute the } k \text{ largest eigenvectors and eigenvalues of } M_* \text{ as } \\
+\hspace{1.2em} V \text{ and } \Lambda \text{ respectively.} \\
+\text{5. } B \leftarrow D_*^{-\frac{1}{2}} V \Lambda^{-1} \\
+\text{6. } \textbf{for } i = 1 \text{ to } n \textbf{ do} \\
+\text{7. } \hspace{2em} \text{Form the affinity vector } a \in \mathbb{R}^{1 \times m} \text{ between } x_i \text{ and points} \\
+\hspace{3.2em} \text{in } Z \\
+\text{8. } \hspace{2em} Q_i \leftarrow a B \\
+\text{9. } \textbf{end for} \\
+\text{10. } \hat{D} \leftarrow \texttt{diag}(Q \Lambda Q^{\intercal} \mathbf{1}) \\
+\text{11. } U \leftarrow \hat{D}^{-\frac{1}{2}} Q \\
+\text{12. } \hat{y} \leftarrow \texttt{KMeans}(U,\ k) \\ \hline
+\end{array}$
+
+
+## Time and Space Complexity
+
+|        | Nystrom                   | Proposed           |
+| ------ |:-------------------------:|:------------------:|
+| Time   | $\mathcal{O}(nm^2 + m^3)$ | $\mathcal{O}(nmk)$ |
+| Space  | $\mathcal{O}(nm)$         | $\mathcal{O}(nk)$  |
+
+
+## Theoretical Guarentees
+
+### Proposition 1
+_Assume that graph $G$ has no more than $k$ connected components. Then $A_{:1}1 = \hat{A}_{:1}1$._
+
+### Proposition 2
+_In the orthogonalization algorithm, $U \Lambda U^{\intercal} = \tilde{U} \tilde{\Lambda} \tilde{U}^{\intercal}$
+and $\tilde{V}^{\intercal} \tilde{V} = I$._
+
+
+## Emperical Evaluation
+
+### Data Sets
+
+* USPS handwritten digits, $n = 6647$, $d = 256$, $k = 9$
+
+### Results in Python:
+Parameters: $m = 300$, $\gamma = 4$, iterations = 1
+
+| Algorithm | Time (sec)  | Accuracy (%) |
+| --------- |:-----------:|:------------:|
+| NCut      | 756.507     | 72.432       |
+| $k$-means | -           | 71.055       |
+| KASP      | **18.814**  | 48.217       |
+| Nystrom   | 24.499      | 72.905       |
+| CSSP      | 21.55       | **73.627**   |
+
+
+## Conclusion
+
+
+\
+
+Repository: [https://github.com/mpoegel/spectral-clustering](https://github.com/mpoegel/spectral-clustering)
+
+
+## References
+
+Li, M., Lian, X. C., Kwok, J. T., & Lu, B. L. (2011, June). Time and space efficient spectral clustering via column sampling. In Computer Vision and Pattern Recognition (CVPR), 2011 IEEE Conference on (pp. 2297-2304). IEEE.

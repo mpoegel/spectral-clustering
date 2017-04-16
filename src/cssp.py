@@ -62,7 +62,7 @@ class CSSP(Clustering):
         B = Sig_.dot(Vp.T).dot(Lam).dot(Vp).dot(Sig_)
         Lam_tilde, V_tilde = sp.linalg.eigh(B)
         self._U = U.dot(Vp).dot(np.diag(1 / np.sqrt(Sig))).dot(V_tilde)
-        # finally we have U as the approximate eigenvalues which we use to cluster
+        # finally we have U as the approximate eigenvectors which we use to cluster
         self._centroids, self._distortion = sp.cluster.vq.kmeans(self._U, self._k)
         # calculate y_hat
         self._y_hat = np.zeros(n, dtype=int)
