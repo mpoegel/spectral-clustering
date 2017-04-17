@@ -142,6 +142,22 @@ Parameters: $m = 500$, iterations = 1
 | CSSP      | **112.667** | **85.981**   |
 
 
+## Memory Efficient Implementation
+
+### Amazon EC2 Compute Optimized c4.2xlarge (8 CPUs, 15GB RAM)
+
+Parameters: $m = 300$
+
+| $n$      | $k$  | Time (sec)  | Accuracy (%) |
+| ---------| ---- |:-----------:|:------------:|
+| 18,623   |  3   | 50.605      | 89.438       |
+| 24,754   |  4   | 65.130      | 83.109       |
+| 30,596   |  5   | 82.712      | 81.671       |
+| 36,017   |  6   | 93.855      | 72.569       |
+| 41,935   |  7   | 111.408     | 57.014       |
+| 211,127  |  2   | -           | -            |
+
+
 ## Conclusion
 
 * The proposed algorithm performs very well in practice
