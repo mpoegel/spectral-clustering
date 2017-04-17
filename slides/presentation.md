@@ -2,11 +2,7 @@
 
 ### Time and Space Efficient Spectral Clustering via Column Sampling by Li et al.
 by Matt Poegel
-\ 
 
-\ 
-
-Repository: [https://github.com/mpoegel/spectral-clustering](https://github.com/mpoegel/spectral-clustering)
 
 ## Motivation
 
@@ -33,7 +29,7 @@ $\begin{array}{|l|} \hline
 * Computing $W \in \mathbb{R}^{n \times n}$ is expensive
     * Use randomness to estimate $W$
 * $W$ is also expensive to store
-    * Use randomness to only use parts of $W$
+    * Use randomness to only compute and store parts of $W$
 
 
 ## Nystrom-based Spectral Clustering
@@ -83,6 +79,19 @@ $\begin{array}{|l|} \hline
 \end{array}$
 
 
+## Proposed Algorithm to Orthogonalize $U$
+
+$\begin{array}{|l|} \hline
+\textbf{Input: } U \in \mathbb{R}^{n \times k},\ \Lambda \in \mathbb{R}^{k \times k} \\
+\textbf{Output: } \text{orthogonalized } \tilde{U} \text{ and } \tilde{\Lambda} \\ \hline
+\text{1. } P \leftarrow U^{\intercal} U \\
+\text{2. eigen-decomposition: } P = V \Sigma V^{\intercal} \\
+\text{3. } B \leftarrow \Sigma^{\frac{1}{2}} V^{\intercal} \Lambda V \Sigma^{\frac{1}{2}} \\
+\text{4. eigen-decomposition: } B = \tilde{V} \tilde{\Lambda} \tilde{V}^{\intercal} \\
+\text{5. } \tilde{U} \leftarrow U V \Sigma^{-\frac{1}{2}} \tilde{V} \\ \hline
+\end{array}$
+
+
 ## Time and Space Complexity
 
 |        | Nystrom                   | Proposed           |
@@ -119,14 +128,37 @@ Parameters: $m = 300$, $\gamma = 4$, iterations = 1
 | CSSP      | 21.55       | **73.627**   |
 
 
+## More Results
+
+### Data Sets
+
+* MNIST handwritten digits, $n = 18831$, $d = 256$, $k = 3$
+
+Parameters: $m = 500$, iterations = 1
+
+| Algorithm | Time (sec)  | Accuracy (%) |
+| --------- |:-----------:|:------------:|
+| Nystrom   | 174.019     | 82.423       |
+| CSSP      | **112.667** | **85.981**   |
+
+
 ## Conclusion
 
+* The proposed algorithm performs very well in practice
+    * outperforms normalized cut at scale
+    * outperforms Nystrom spectral clustering at scale 
+        * time
+        * accuracy
+        * space
+* Authors also showed success with image segmentation
+    * computed the eigenvectors of a $4752 \times 3168$ image in only 23 seconds
 
-\
 
-Repository: [https://github.com/mpoegel/spectral-clustering](https://github.com/mpoegel/spectral-clustering)
+[https://github.com/mpoegel/spectral-clustering](https://github.com/mpoegel/spectral-clustering)
 
 
 ## References
 
 Li, M., Lian, X. C., Kwok, J. T., & Lu, B. L. (2011, June). Time and space efficient spectral clustering via column sampling. In Computer Vision and Pattern Recognition (CVPR), 2011 IEEE Conference on (pp. 2297-2304). IEEE.
+
+Yan, D., Huang, L., & Jordan, M. I. (2009, June). Fast approximate spectral clustering. In Proceedings of the 15th ACM SIGKDD international conference on Knowledge discovery and data mining (pp. 907-916). ACM.
