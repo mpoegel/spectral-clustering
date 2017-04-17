@@ -10,3 +10,9 @@ if [ ! -f data/raw/mnist ]; then
   bzip2 -d data/raw/mnist.scale.bz2
   mv data/raw/mnist.scale data/raw/mnist
 fi
+
+if [ ! -f data/raw/mnist8m ]; then
+  wget https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/multiclass/mnist8m.scale.bz2 -P data/raw
+  bzip2 -d data/raw/mnist8m.scale.bz2
+  mv data/raw/mnist8m.scale data/raw/mnist8m
+fi
