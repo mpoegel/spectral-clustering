@@ -1,6 +1,6 @@
 # Compile the project
 benchmark:
-	g++ -std=c++11 -fopenmp -I lib/Eigen -I lib/spectra-0.4.0/include src/benchmark.cpp -o bin/benchmark
+	g++ src/benchmark.cpp -o bin/benchmark -O2 -larmadillo
 
 # Make the pdf slides from the markdown files
 SLIDES := $(wildcard slides/*.md)

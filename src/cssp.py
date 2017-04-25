@@ -67,7 +67,7 @@ class CSSP(Clustering):
         # calculate y_hat
         self._y_hat = np.zeros(n, dtype=int)
         for i in range(n):
-            dists = np.array([np.linalg.norm(self._U[i] - self._centroids[c]) 
+            dists = np.array([np.linalg.norm(self._U[i] - self._centroids[c])
                               for c in range(self._k)])
             self._y_hat[i] = np.argmin(dists)
         self._time = time.time() - start

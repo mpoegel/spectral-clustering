@@ -1,253 +1,156 @@
-#include <algorithm>
-#include <chrono>
-#include <fstream>
+#include <cmath>
 #include <iostream>
-#include <random>
-#include <stdlib.h>
 #include <string>
 #include <vector>
 
-#include <Eigen/Sparse>
+#include <armadillo>
 
 using namespace std;
 
 
-int lineCount(const char* filename)
+arma::uvec CSSC(const arma::mat &X, int k, int m)
 {
-  int count = 0;
-  string line;
-  ifstream infile(filename);
-  while (getline(infile, line))
-    ++count;
-  return count;
-  infile.close();
+  arma::wall_clock timer;
+  timer.tic();
+  int n = X.n_rows;
+  arma::uvec inds = arma::linspace<arma::uvec>(0, n-1, n);
+  inds = arma::shuffle(inds);
+  inds = inds.rows(0, m-1);
+
+  arma::mat Z = X.rows(inds);
+  double mu = 0.0;
+  for (unsigned int i=0; i<m; i++) {
+    for (unsigned int j=0; j<m; j++) {
+      mu += pow(arma::norm(Z.row(i) - Z.row(j)), 2);
+    }
+  }
+  mu /= pow(mu, 2);
+  mu = 1 / mu;
+
+  arma::mat A_11(m, m);
+  for (unsigned int i=0; i<m; i++) {
+    for (unsigned int j=i; j<m; j++) {
+      double val = exp(-mu * pow(arma::norm(Z.row(i) - Z.row(j)), 2));
+      A_11(i, j) = val;
+      A_11(j, i) = val;
+    }
+  }
+
+  arma::vec ww = A_11 * arma::ones<arma::vec>(m);
+  arma::mat D_star = arma::diagmat(ww);
+  arma::mat D_star_ = arma::diagmat(arma::pow(arma::sqrt(ww), -1));
+  arma::mat M_star = D_star_ * A_11 * D_star_;
+  // find the eigendecomposition of M_star
+  arma::vec eigval;
+  arma::mat eigvec;
+  arma::eig_sym(eigval, eigvec, M_star);
+  eigval = eigval.rows(m-k, m-1);
+  eigvec = eigvec.cols(m-k, m-1);
+  
+  arma::mat Lam = arma::diagmat(eigval);
+  arma::mat B = D_star_ * eigvec * arma::diagmat(arma::pow(eigval, -1));
+  
+  arma::mat Q(n, k);
+  for (unsigned int i=0; i<n; i++) {
+    arma::rowvec a(m);
+    for (unsigned int j=0; j<m; j++) {
+      a.col(j) = arma::norm(X.row(i) - Z.row(j));
+    }
+    Q.row(i) = a * B;
+  }
+  
+  arma::vec dd = Q * Lam * Q.t() * arma::ones<arma::vec>(n);
+  arma::mat D_hat = arma::diagmat(dd);
+  arma::mat U = arma::diagmat(arma::pow(arma::sqrt(dd), -1)) * Q;
+  // orthogonalize U
+  arma::mat P = U.t() * U;
+  arma::vec Sig;
+  arma::mat Vp;
+  arma::eig_sym(Sig, Vp, P);
+  arma::mat Sig_ = arma::diagmat(arma::sqrt(Sig));
+  B = Sig_ * Vp.t() * Lam * Vp * Sig_;
+  arma::vec Lam_tilde;
+  arma::mat V_tilde;
+  arma::eig_sym(Lam_tilde, V_tilde, B);
+  
+  U = U * Vp * arma::diagmat(arma::pow(arma::sqrt(Sig), -1)) * V_tilde;
+  // cluster the approximated eigenvectors, U
+  arma::mat centroids;
+  arma::uvec y_hat(n);  
+  bool status = arma::kmeans(centroids, U.t(), k, arma::random_subset, 10, false);
+  if (!status) {
+    cout << "clustering failed!" << endl;
+    return y_hat;
+  }
+  centroids = centroids.t();
+  arma::vec d(k);
+  double t = timer.toc();
+  cout << "Finished after " << t << "s" << endl;
+  for (unsigned int i=0; i<n; i++) {
+    for (unsigned int j=0; j<k; j++) {
+      d.row(j) = arma::norm(U.row(i) - centroids.row(j));
+    }
+    y_hat.row(i) = d.index_min();
+  }
+  return y_hat;
 }
 
-vector<string> split(const char *str, char c=' ')
+
+double accuracy(const arma::uvec &Y, const arma::uvec &y_hat)
 {
-  vector<string> result;
+  arma::uvec uniques = arma::unique(Y);
+  unsigned int k = uniques.n_rows;
+  unsigned int n = Y.n_rows;
+  vector<unsigned int> perm(k, 0);
+  for (unsigned int i=0; i<k; i++) perm[i] = i + 1;
+  double res = 0.0;
   do {
-    const char *begin = str;
-    while (*str != c && *str)
-      str++;
-    result.push_back(string(begin, str));
-  } while (0 != *str++);
-  return result;
-}
-
-tuple<Eigen::SparseMatrix<double, Eigen::RowMajor>, Eigen::VectorXi> loadSparseMatrix(const char* filename)
-{
-  // construct a sparse data matrix, X, and a class vector, Y
-  typedef Eigen::Triplet<double> T;
-  std::vector<T> tripletList;
-  int numRows = lineCount(filename);
-  int numCols = 0;
-  tripletList.reserve(numRows * 256);
-  ifstream infile(filename);
-  string line;
-  vector<string> bits;
-  Eigen::VectorXi Y(numRows);
-  int r = 0;
-  // read each line of the input file, dynamically counting the number of columns
-  while (getline(infile, line)) {
-    // each row is of the format: y_i col:val col:val ...
-    bits = split(line.c_str());
-    Y[r] = atoi(bits[0].c_str());
-    for (int c=1; c<bits.size(); c++) {
-      vector<string> bit = split(bits[c].c_str(), ':');
-      if (bit.size() != 2) {
-        continue;
-      }
-      int col = atoi(bit[0].c_str());
-      double val = atof(bit[1].c_str());
-      // build the list of triplets used to construct the sparse matrix
-      tripletList.push_back(T(r, col-1, val));
-      if (col > numCols) {
-        numCols = col;
-      }
+    arma::uvec yy(y_hat);
+    for (unsigned int i=0; i<k; i++) {
+      arma::uvec inds = arma::find(y_hat == i);
+      arma::uvec f(inds.n_rows);
+      f.fill(perm[i]);
+      yy.rows(inds) = f;
     }
-    r++;
-  }
-  Eigen::SparseMatrix<double, Eigen::RowMajor> X(numRows, numCols);
-  X.setFromTriplets(tripletList.begin(), tripletList.end());
-  infile.close();
-  return make_tuple(X, Y);
-}
+    arma::uvec match = yy == Y;
+    double r = (double)arma::sum(match) / (double)n;
+    res = max(r, res);
+  } while (next_permutation(perm.begin(), perm.end()));
 
-void filter(Eigen::SparseMatrix<double, Eigen::RowMajor> &X, Eigen::VectorXi &Y, const vector<int> &mask)
-{
-  int count = 0;
-  for (int r=0; r<Y.rows(); r++) {
-    for (int m=0; m<mask.size(); m++) {
-      if (Y[r] == mask[m])
-        count++;
-    }
-  }
-  typedef Eigen::Triplet<int> T;
-  std::vector<T> tripletList;
-  tripletList.reserve(count);
-  Eigen::VectorXi Y_prime(count);
-  int k = 0;
-  for (int r=0; r<Y.rows(); r++) {
-    for (int m=0; m<mask.size(); m++) {
-      if (Y[r] == mask[m]) {
-        tripletList.push_back(T(k, r, 1));
-        Y_prime[k] = Y[r];
-        k++;
-      }
-    }
-  }
-  Eigen::SparseMatrix<double, Eigen::RowMajor> M(count, Y.rows());
-  M.setFromTriplets(tripletList.begin(), tripletList.end());
-  X = M * X;
-  Y = Y_prime;
-}
-
-vector<int> vrange(int a, int b)
-{
-  int n = b - a;
-  vector<int> res(n, 0);
-  for (int i=0; i<n; i++) {
-    res[i] = a + i;
-  }
   return res;
-}
-
-vector<int> sampleRange(int a, int b, int k) {
-  vector<int> res;
-  res.reserve(k);
-  vector<int> range = vrange(a, b);
-  unsigned int seed = chrono::system_clock::now().time_since_epoch().count();
-  shuffle(range.begin(), range.end(), default_random_engine(seed));
-  for (int i=0; i<k; i++) {
-    res[i] = range[i];
-  }
-  return res;
-}
-
-Eigen::VectorXd zeros(int n)
-{
-  Eigen::VectorXd res(n);
-  for (int i=0; i<n; i++) {
-    res[i] = 0;
-  }
-  return res;
-}
-
-Eigen::MatrixXd sparseToDense(const Eigen::SparseMatrix<double, Eigen::RowMajor> &X)
-{
-  int n = X.rows();
-  Eigen::MatrixXd I = Eigen::MatrixXd::Identity(n, n);
-  return I * X;
-}
-
-Eigen::VectorXi kMeans(const Eigen::MatrixXd &X, int k)
-{
-  int n = X.rows();
-  int d = X.cols();
-  Eigen::MatrixXd centroids(k, d);
-  vector<int> centRows = sampleRange(0, n, k);
-  for (int i=0; i<k; i++) {
-    int r = centRows[i];
-    centroids.row(i) = X.row(r);
-  }
-  Eigen::VectorXi Y_hat(n);
-  // map each input to its closest centroid
-  for (int i=0; i<n; i++) {
-    double min_d = (centroids.row(0) - X.row(i)).norm();
-    int min_c = 0;
-    for (int j=1; j<k; j++) {
-      double d = (centroids.row(j) - X.row(i)).norm();
-      if (d < min_d) {
-        min_d = d;
-        min_c = j;
-      }
-    }
-    Y_hat[i] = min_c;
-  }
-  Eigen::VectorXi Y_hat_copy(n);
-  int num_updates = n;
-  int iterations = 0;
-  while (true) {
-    // map each input to its closest centroid
-    for (int i=0; i<n; i++) {
-      double min_d = (centroids.row(0) - X.row(i)).norm();
-      int min_c = 0;
-      for (int j=1; j<k; j++) {
-        double d = (centroids.row(j) - X.row(i)).norm();
-        if (d < min_d) {
-          min_d = d;
-          min_c = j;
-        }
-      }
-      Y_hat_copy[i] = min_c;
-    }
-    // check stopping condition
-    num_updates = 0;
-    Eigen::Matrix<bool, Eigen::Dynamic, 1> diff = Y_hat.cwiseEqual(Y_hat_copy);
-    for (int i=0; i<n; i++) {
-      if (!diff[i]) num_updates++;
-    }
-    Y_hat = Y_hat_copy;
-    // if (num_updates > n * 0.1) {
-    if (iterations > 100) {
-      break;
-    }
-    // compute the new centers
-    for (int i=0; i<k; i++) {
-      Eigen::VectorXd new_mu = zeros(d);
-      int count = 0;
-      for (int j=0; j<n; j++) {
-        if (Y_hat[j] == i) {
-          new_mu += X.row(j);
-          count++;
-        }
-      }
-      centroids.row(i) = new_mu;
-    }
-    iterations++;
-  }
-  cout << "stopped after " << iterations << " iterations" << endl;
-  return Y_hat;
-}
-
-Eigen::VectorXi CSSP(Eigen::SparseMatrix<double, Eigen::RowMajor> &X, int k, int m)
-{
-  int n = X.rows();
-  Eigen::VectorXi Y_hat(n);
-  
-  
-  return Y_hat;
 }
 
 
 int main(int argc, char* argv[])
 {
-  cout << "hello world!" << endl;
-  string fn = "data/raw/usps";
+  string file_name = "data/processed/usps.csv";
+  arma::arma_rng::set_seed_random();
 
-  Eigen::SparseMatrix<double, Eigen::RowMajor> X;
-  Eigen::VectorXi Y;
-  tie(X, Y) = loadSparseMatrix(fn.c_str());
-  
-  vector<int> mask;
-  mask.push_back(1);
-  mask.push_back(2);
-  filter(X, Y, mask);
-  // // cout << Y.rows() << endl;
-  // CSSP(X, 2, 300);
+  arma::mat A;
+  A.load(file_name, arma::csv_ascii);
+  int d = A.n_cols;
+  arma::mat X = A.cols(0, d-2);
+  arma::vec Y = A.col(d-1);
+  arma::uvec uY = arma::conv_to<arma::uvec>::from(Y);
 
-  Eigen::MatrixXd Xd = sparseToDense(X);
-  
-  cout << "starting k-means" << endl;
-  Eigen::VectorXi Y_hat = kMeans(X, 2);
-  Eigen::Matrix<bool, Eigen::Dynamic, 1> diff = Y.cwiseEqual(Y_hat);
-  double accuracy = 0.0;
-  for (int i=0; i<diff.rows(); i++) {
-    if (diff[i]) accuracy++;
-  }
-  accuracy = (1 - accuracy / Y.rows()) * 100;
-  cout << accuracy << endl;
+  arma::uvec inds = arma::find(uY == 1);
+  inds = arma::join_cols(inds, arma::find(uY == 2));
+
+  X = X.rows(inds);
+  uY = uY.rows(inds);
+
+  cout << X.n_rows << ", " << X.n_cols << endl;
+  cout << uY.n_rows << ", " << uY.n_cols << endl;
+  cout << arma::unique(uY).t() << endl;
+
+  unsigned int m = 300;
+  unsigned int k = 2;
+  arma::uvec y_hat = CSSC(X, k, m);
+
+  double accur = accuracy(uY, y_hat);
+  cout << endl;
+  cout << "Accuracy: " << accur << endl;
+  cout << endl;
 
   return 0;
 }
